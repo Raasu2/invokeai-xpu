@@ -36,14 +36,17 @@ This is “this finally works”.
 
 ## What this script does
 
-- Installs Intel GPU runtime stuff (Level Zero, OpenCL, media libs)
-- Sets up a Python venv at `/opt/xpu`
-- Installs **PyTorch XPU builds**
-- Installs InvokeAI
-- Applies required InvokeAI patches for XPU (thank you MordragT)
-- Fixes missing Python deps 
-- Creates a systemd service
-- Makes sure XPU actually shows up at runtime
+- Installs Intel GPU userspace (Level Zero, OpenCL, media drivers)
+- Creates a clean Python venv at `/opt/invokeai-xpu`
+- Forces PyTorch XPU wheels (prevents CUDA installs)
+- Installs InvokeAI `6.10.0`
+- Applies required InvokeAI XPU patches (MordragT-based, filtered)
+- Patches InvokeAI to:
+  - make IPEX optional
+  - guard against missing `torch.xpu.mem_get_info`
+- Writes a minimal InvokeAI config
+- Creates a systemd service + wrapper
+- Verifies XPU visibility at service start
 
 End result:  
 InvokeAI runs on Intel GPU and you can open the UI in a browser.
