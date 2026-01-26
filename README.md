@@ -27,33 +27,58 @@ After a **long debugging session** with ChatGPT, this script captures **everythi
 - Headless Ubuntu 24.04
 - Proxmox LXC
 
-This is not “best practice”.
-This is “this finally works”.
+So this is:
+
+- ✅ A reproducible install that **actually runs InvokeAI on Intel XPU**
+- ✅ Headless, systemd-managed, browser UI accessible
+- ✅ Tested on **Intel Arc (B-series) and Intel iGPU**
+- ❌ Not optimized
+- ❌ Not officially supported
+- ❌ Not guaranteed to survive future InvokeAI releases
+
 
 ---
 
 ## What this script does
 
-- Installs Intel GPU userspace (Level Zero, OpenCL, media drivers)
-- Creates a clean Python venv at `/opt/invokeai-xpu`
-- Forces PyTorch XPU wheels (prevents CUDA installs)
-- Installs InvokeAI `6.10.0`
-- Applies required InvokeAI XPU patches (MordragT-based, filtered)
-- Patches InvokeAI to:
-  - make IPEX optional
-  - guard against missing `torch.xpu.mem_get_info`
-- Writes a minimal InvokeAI config
-- Creates a systemd service + wrapper
-- Verifies XPU visibility at service start
+The install script (`install-invoke-xpu.sh`) performs the following:
 
-End result:  
-InvokeAI runs on Intel GPU and you can open the UI in a browser.
+### System & GPU
+- Installs Intel GPU userspace:
+  - Level Zero
+  - OpenCL ICD
+  - Media drivers
+- Verifies `/dev/dri/renderD*` access inside LXC
+
+### Python & PyTorch
+- Creates a clean Python virtualenv at: `/opt/invokeai-xpu`
+- Forces **PyTorch XPU wheels**
+- Prevents CUDA wheels from being pulled in
+
+### InvokeAI
+- Installs **InvokeAI 6.10.0**
+- Writes a **minimal, XPU-safe InvokeAI config**
+- Applies **required runtime patches**, including:
+- Making `intel_extension_for_pytorch (IPEX)` optional
+- Guarding against missing `torch.xpu.mem_get_info()`
+- Fixing invocation stats crashes when VRAM info is unavailable
+
+### Runtime
+- Creates a **systemd service**
+- Verifies XPU availability at startup
+- Runs InvokeAI fully headless
+- Exposes the web UI over HTTP
+
+### End result
+InvokeAI runs on Intel GPU, images generate successfully, and the UI is accessible from a browser.
 
 ## Known issues
-- InvokeAI does not detect available VRAM (did not affect image generation)
-- I'm not seeing generation preview
-- UI is not updating after generation finishes had to reload manually
-- Same issue installing models, does not show progress if you dont refresh page
+- InvokeAI **cannot accurately detect available VRAM** on Intel XPU  
+(workarounds are applied; generation still works)
+- Generation preview may not update in real time
+- UI may require a refresh after generation finishes
+- Model downloads may not show progress until refresh
+- GPU may stay “awake” after generation unless the service is stopped 
 
 ---
 
