@@ -87,6 +87,7 @@ InvokeAI runs on Intel GPU, images generate successfully, and the UI is accessib
 ### Proxmox host
 
 - Intel GPU
+- XE driver
 - GPU passed through to the LXC
 - This is what I added to the container config file on the Proxmox host (`/etc/pve/lxc/<id>.conf`):
 ```bash
