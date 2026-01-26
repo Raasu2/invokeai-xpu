@@ -7,12 +7,9 @@ die(){ echo -e "\n[ERROR] $*\n" >&2; exit 1; }
 
 [[ "${EUID}" -eq 0 ]] || die "Run as root (sudo -i)."
 
-CONF="/etc/invokeai-xpu/install.conf"
-[[ -f "$CONF" ]] && source "$CONF"
-
 VENV_DIR="${VENV_DIR:-/opt/invokeai-xpu}"
 PY="${VENV_DIR}/bin/python"
-[[ -x "$PY" ]] || die "Python not found/executable at: $PY"
+[[ -x "$PY" ]] || die "Python not found at: $PY"
 
 SITEPKG="$("$PY" - <<'PY'
 import site
@@ -22,93 +19,93 @@ for p in site.getsitepackages():
 PY
 )"
 
-STATS_COMMON="${SITEPKG}/invokeai/app/services/invocation_stats/invocation_stats_common.py"
+MODEL_CACHE="${SITEPKG}/invokeai/backend/model_manager/load/model_cache/model_cache.py"
+ENVKEY="INVOKEAI_XPU_VRAM_TOTAL_GB"
 
 log "Using venv: $VENV_DIR"
 log "site-packages: $SITEPKG"
-log "Target: $STATS_COMMON"
+log "Target: $MODEL_CACHE"
 
-"$PY" - <<'PY'
+"$PY" - <<PY
 from pathlib import Path
 import re
 
-p = Path(r"__STATS_COMMON__")
+p = Path(r"$MODEL_CACHE")
+ENVKEY = "$ENVKEY"
+
 if not p.exists():
-    print("Skip: not found", p)
-    raise SystemExit(0)
+    raise SystemExit(f"ERROR: not found: {p}")
 
 txt = p.read_text(encoding="utf-8", errors="replace")
 
 # Ensure import os exists
-if re.search(r"(?m)^import os\s*$", txt) is None:
-    m = re.search(r"(?m)^(from __future__ .*?\n)", txt)
+if re.search(r"(?m)^import os\\s*$", txt) is None:
+    m = re.search(r"(?m)^(from __future__ .*?\\n)", txt)
     if m:
-        txt = txt[:m.end()] + "import os\n" + txt[m.end():]
+        txt = txt[:m.end()] + "import os\\n" + txt[m.end():]
     else:
-        txt = "import os\n" + txt
+        txt = "import os\\n" + txt
+    print("Added: import os")
 
-lines = txt.splitlines(True)
+# Patch the crashing assignment (exact or equivalent forms)
+# Common forms seen:
+#   _, total_cuda_vram_bytes = torch.xpu.mem_get_info(self._execution_device)
+#   mem_free, total_cuda_vram_bytes = torch.xpu.mem_get_info(self._execution_device)
+#   _, total_vram_bytes = torch.xpu.mem_get_info(self._execution_device)
+pat = re.compile(
+    r"(?m)^(\\s*)(\\w+)\\s*,\\s*(\\w+)\\s*=\\s*torch\\.xpu\\.mem_get_info\\(self\\._execution_device\\)\\s*$"
+)
 
-# Locate def __str__ (supports optional return annotation)
-def_re = re.compile(r"^(\s*)def\s+__str__\s*\(\s*self[^)]*\)\s*(?:->\s*[^:]+)?\s*:\s*$")
-start = None
-indent = None
-for i, line in enumerate(lines):
-    m = def_re.match(line)
-    if m:
-        start = i
-        indent = m.group(1)
-        break
+m = pat.search(txt)
+if not m:
+    # Sometimes there is spacing or slightly different self attribute access
+    pat2 = re.compile(
+        r"(?m)^(\\s*)(\\w+)\\s*,\\s*(\\w+)\\s*=\\s*torch\\.xpu\\.mem_get_info\\(([^\\)]+)\\)\\s*$"
+    )
+    m2 = pat2.search(txt)
+    if not m2:
+        raise SystemExit("ERROR: Could not find a torch.xpu.mem_get_info(...) assignment to patch in model_cache.py")
+    indent, a, b, arg = m2.group(1), m2.group(2), m2.group(3), m2.group(4).strip()
+    # Only patch if it's using self._execution_device (or close)
+    if "self._execution_device" not in arg:
+        raise SystemExit(f"ERROR: Found mem_get_info({arg}) but it doesn't reference self._execution_device; refusing to patch blindly.")
+    rep = (
+        f"{indent}try:\\n"
+        f"{indent}    {a}, {b} = torch.xpu.mem_get_info({arg})\\n"
+        f"{indent}except Exception:\\n"
+        f"{indent}    # Intel XPU may not support mem_get_info(); use env override or 0\\n"
+        f"{indent}    _gb = float(os.environ.get('{ENVKEY}', '0') or 0)\\n"
+        f"{indent}    {a} = 0\\n"
+        f"{indent}    {b} = int(_gb * (1024 ** 3)) if _gb > 0 else 0\\n"
+    )
+    txt = pat2.sub(rep, txt, count=1)
+    print("Patched: broad mem_get_info(...) assignment")
+else:
+    indent, a, b = m.group(1), m.group(2), m.group(3)
+    rep = (
+        f"{indent}try:\\n"
+        f"{indent}    {a}, {b} = torch.xpu.mem_get_info(self._execution_device)\\n"
+        f"{indent}except Exception:\\n"
+        f"{indent}    # Intel XPU may not support mem_get_info(); use env override or 0\\n"
+        f"{indent}    _gb = float(os.environ.get('{ENVKEY}', '0') or 0)\\n"
+        f"{indent}    {a} = 0\\n"
+        f"{indent}    {b} = int(_gb * (1024 ** 3)) if _gb > 0 else 0\\n"
+    )
+    txt = pat.sub(rep, txt, count=1)
+    print("Patched: mem_get_info(self._execution_device) with try/except fallback")
 
-if start is None:
-    raise SystemExit("ERROR: def __str__ not found")
+p.write_text(txt, encoding="utf-8")
+print("Wrote:", p)
 
-# Find end of method: next "def " at same indent level
-end = len(lines)
-for j in range(start + 1, len(lines)):
-    if lines[j].startswith(indent + "def "):
-        end = j
-        break
-
-i1 = indent + "    "
-i2 = indent + "        "
-
-# IMPORTANT: plain strings (not f-strings) so {self...} is not evaluated by the patcher
-new_block = []
-new_block.append(lines[start])  # keep original def line
-new_block.append(i1 + "_str = ''\n")
-new_block.append(i1 + "if getattr(self, 'graph_stats', None):\n")
-new_block.append(i2 + "_str += f\"Graph stats: {self.graph_stats.session_id}\\n\" if hasattr(self.graph_stats, 'session_id') else ''\n")
-new_block.append(i2 + "_str += getattr(self.graph_stats, 'table_str', '') + \"\\n\"\n")
-new_block.append(i1 + "if self.graph_stats.ram_usage_gb is not None and self.graph_stats.ram_change_gb is not None:\n")
-new_block.append(i2 + "_str += f\"RAM used by InvokeAI process: {self.graph_stats.ram_usage_gb:4.2f}G ({self.graph_stats.ram_change_gb:+5.3f}G)\\n\"\n")
-new_block.append(i1 + "_str += f\"RAM used to load models: {self.model_cache_stats.total_usage_gb:4.2f}G\\n\"\n")
-new_block.append(i1 + "if getattr(self, 'vram_usage_gb', None):\n")
-new_block.append(i2 + "_str += f\"VRAM in use: {self.vram_usage_gb:4.3f}G\\n\"\n")
-new_block.append(i1 + "_str += \"RAM cache statistics:\\n\"\n")
-new_block.append(i1 + "_str += f\"   Model cache hits: {self.model_cache_stats.cache_hits}\\n\"\n")
-new_block.append(i1 + "_str += f\"   Model cache misses: {self.model_cache_stats.cache_misses}\\n\"\n")
-new_block.append(i1 + "_str += f\"   Models cached: {self.model_cache_stats.models_cached}\\n\"\n")
-new_block.append(i1 + "_str += f\"   Models cleared from cache: {self.model_cache_stats.models_cleared}\\n\"\n")
-new_block.append(i1 + "_cap = float(self.model_cache_stats.cache_size_gb or 0)\n")
-new_block.append(i1 + "if _cap <= 0:\n")
-new_block.append(i2 + "try:\n")
-new_block.append(i2 + "    _cap = float(os.environ.get('INVOKEAI_XPU_VRAM_TOTAL_GB', '0') or 0)\n")
-new_block.append(i2 + "except Exception:\n")
-new_block.append(i2 + "    _cap = 0.0\n")
-new_block.append(i1 + "_str += f\"   Cache high water mark: {self.model_cache_stats.high_water_mark_gb:4.2f}/{_cap:4.2f}G\\n\"\n")
-new_block.append(i1 + "return _str\n")
-new_block.append("\n")
-
-out = lines[:start] + new_block + lines[end:]
-p.write_text("".join(out), encoding="utf-8")
-print("✔ Replaced __str__ safely in:", p)
+# Quick compile check
+import py_compile
+py_compile.compile(str(p), doraise=True)
+print("py_compile: OK")
 PY
 
-# Inject path placeholder for the python snippet above (safe, only affects this file)
-sed -i "s|__STATS_COMMON__|$STATS_COMMON|g" "$0" 2>/dev/null || true
-
-log "Validate module compiles..."
-python3 -m py_compile "$STATS_COMMON" && log "OK: py_compile passed"
-
-log "Done. (Optional) restart: systemctl restart invokeai.service"
+log "Done."
+log "Tip: set a VRAM total so cache math behaves:"
+log "  systemctl edit invokeai.service"
+log "  [Service]"
+log "  Environment=INVOKEAI_XPU_VRAM_TOTAL_GB=12"
+log "Then: systemctl daemon-reload && systemctl restart invokeai.service"
