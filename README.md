@@ -89,8 +89,8 @@ On a clean Ubuntu 24.04 LXC:
 ```bash
 git clone https://github.com/Raasu2/invokeai-xpu.git
 cd invokeai-xpu
-chmod +x setup-invokeai-xpu.sh
-sudo bash setup-invokeai-xpu.sh
+chmod +x install-invoke-xpu.sh
+sudo bash install-invoke-xpu.sh
 ```
 
 ## Thanks / Credits
