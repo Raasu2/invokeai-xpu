@@ -12,6 +12,7 @@ CONF="/etc/invokeai-xpu/install.conf"
 
 VENV_DIR="${VENV_DIR:-/opt/invokeai-xpu}"
 PY="${VENV_DIR}/bin/python"
+[[ -x "$PY" ]] || die "Python not found/executable at: $PY"
 
 SITEPKG="$("$PY" - <<'PY'
 import site
@@ -26,7 +27,9 @@ log "site-packages: $SITEPKG"
 
 API_APP="${SITEPKG}/invokeai/app/api_app.py"
 DIFF_PIPE="${SITEPKG}/invokeai/backend/stable_diffusion/diffusers_pipeline.py"
-STATS_COMMON="${SITEPKG}/invokeai/app/services/invocation_stats/invocation_stats_common.py"
+MODEL_CACHE="${SITEPKG}/invokeai/backend/model_manager/load/model_cache/model_cache.py"
+
+ENVKEY="INVOKEAI_XPU_VRAM_TOTAL_GB"
 
 # ------------------------------------------------------------
 # F1.1: Make IPEX import optional (api_app.py)
@@ -56,16 +59,14 @@ else:
 PY
 
 # ------------------------------------------------------------
-# F1.2: Patch diffusers_pipeline.py mem_get_info call used by
-#       _adjust_memory_efficient_attention (your runtime crash)
+# F1.2: Patch diffusers_pipeline.py mem_get_info call (if present)
 # ------------------------------------------------------------
-log "F1.2: Patch diffusers_pipeline.py torch.xpu.mem_get_info() -> safe fallback..."
+log "F1.2: Patch diffusers_pipeline.py torch.xpu.mem_get_info() -> safe fallback (if present)..."
 "$PY" - <<PY
 from pathlib import Path
 import re
 
-ENVKEY = "INVOKEAI_XPU_VRAM_TOTAL_GB"
-
+ENVKEY = "$ENVKEY"
 p = Path(r"$DIFF_PIPE")
 if not p.exists():
     print("Skip: not found", p)
@@ -73,35 +74,32 @@ if not p.exists():
 
 txt = p.read_text(encoding="utf-8", errors="replace")
 
-# ensure import os exists
-if re.search(r"(?m)^import os\s*$", txt) is None:
-    # insert after __future__ if present, else at top
+# Ensure import os exists
+if re.search(r"(?m)^import os\\s*$", txt) is None:
     m = re.search(r"(?m)^(from __future__ .*\\n)", txt)
     if m:
         pos = m.end()
-        txt = txt[:pos] + "import os\n" + txt[pos:]
+        txt = txt[:pos] + "import os\\n" + txt[pos:]
     else:
-        txt = "import os\n" + txt
+        txt = "import os\\n" + txt
     print("Added: import os")
 
 # Replace:
 #   mem_free, _ = torch.xpu.mem_get_info(<anything>)
-# with a try/except fallback.
-pat = r"(?m)^(\s*)mem_free,\s*_\s*=\s*torch\.xpu\.mem_get_info\((.+)\)\s*$"
-
+pat = r"(?m)^(\\s*)mem_free,\\s*_\\s*=\\s*torch\\.xpu\\.mem_get_info\\((.+)\\)\\s*$"
 m = re.search(pat, txt)
 if not m:
-    print("WARN: did not find torch.xpu.mem_get_info(...) assignment in diffusers_pipeline.py")
+    print("No mem_get_info assignment found here (ok).")
 else:
     indent = m.group(1)
     arg = m.group(2).strip()
     rep = (
-        f"{indent}try:\n"
-        f"{indent}    mem_free, _ = torch.xpu.mem_get_info({arg})\n"
-        f"{indent}except Exception:\n"
-        f"{indent}    # Intel XPU may not support free-memory query; fall back to configured total or 0\n"
-        f"{indent}    _gb = float(os.environ.get('{ENVKEY}', '0') or 0)\n"
-        f"{indent}    mem_free = int(_gb * (1024 ** 3)) if _gb > 0 else 0\n"
+        f"{indent}try:\\n"
+        f"{indent}    mem_free, _ = torch.xpu.mem_get_info({arg})\\n"
+        f"{indent}except Exception:\\n"
+        f"{indent}    # Intel XPU may not support free-memory query; fall back to configured total or 0\\n"
+        f"{indent}    _gb = float(os.environ.get('{ENVKEY}', '0') or 0)\\n"
+        f"{indent}    mem_free = int(_gb * (1024 ** 3)) if _gb > 0 else 0\\n"
     )
     txt = re.sub(pat, rep, txt, count=1)
     print("Patched mem_get_info fallback in diffusers_pipeline.py")
@@ -111,93 +109,76 @@ print("Wrote:", p)
 PY
 
 # ------------------------------------------------------------
-# F1.3: Fix invocation_stats_common.py (__str__ must return string)
-#       - robustly finds def __str__(...) even with type hints
-#       - prevents bash from eating python (quoted heredoc)
+# F1.4: Patch model_cache.py (this is the crash you hit)
+#   torch.xpu.mem_get_info(self._execution_device) may throw NOTIMPLEMENTED
 # ------------------------------------------------------------
-log "F1.3: Fix invocation_stats_common.py (__str__ must return string)..."
-"$PY" - <<'PYCODE'
+log "F1.4: Patch model_cache.py torch.xpu.mem_get_info(self._execution_device) -> safe fallback..."
+"$PY" - <<PY
 from pathlib import Path
 import re
 
-STATS_COMMON = Path(r"__STATS_COMMON__")
-if not STATS_COMMON.exists():
-    print("Skip: not found", STATS_COMMON)
+ENVKEY = "$ENVKEY"
+p = Path(r"$MODEL_CACHE")
+if not p.exists():
+    print("Skip: not found", p)
     raise SystemExit(0)
 
-txt = STATS_COMMON.read_text(encoding="utf-8", errors="replace")
+txt = p.read_text(encoding="utf-8", errors="replace")
 
-# Ensure import os exists (safe to add)
-if re.search(r"(?m)^import os\s*$", txt) is None:
-    m = re.search(r"(?m)^(from __future__ .*?\n)", txt)
+# Ensure import os exists
+if re.search(r"(?m)^import os\\s*$", txt) is None:
+    m = re.search(r"(?m)^(from __future__ .*?\\n)", txt)
     if m:
-        pos = m.end()
-        txt = txt[:pos] + "import os\n" + txt[pos:]
+        txt = txt[:m.end()] + "import os\\n" + txt[m.end():]
     else:
-        txt = "import os\n" + txt
+        txt = "import os\\n" + txt
     print("Added: import os")
 
-lines = txt.splitlines(True)
+# Target the exact assignment that crashes in your logs:
+#   _, total_cuda_vram_bytes = torch.xpu.mem_get_info(self._execution_device)
+pat = r"(?m)^(\\s*)_,\\s*total_cuda_vram_bytes\\s*=\\s*torch\\.xpu\\.mem_get_info\\(self\\._execution_device\\)\\s*$"
 
-# Find "def __str__(...)" with optional return annotation
-def_pat = re.compile(r"^(\s*)def\s+__str__\s*\(\s*self[^)]*\)\s*(?:->\s*[^:]+)?\s*:\s*$")
+m = re.search(pat, txt)
+if not m:
+    print("WARN: did not find the exact mem_get_info assignment. Will try a broader pattern...")
 
-start = None
-indent = None
-for i, line in enumerate(lines):
-    m = def_pat.match(line)
-    if m:
-        start = i
-        indent = m.group(1)
-        break
-
-if start is None:
-    print("ERROR: Could not locate def __str__(...) block")
-    raise SystemExit(2)
-
-# Find end of block: next "def " at same indent level
-end = len(lines)
-for j in range(start + 1, len(lines)):
-    if lines[j].startswith(indent + "def "):
-        end = j
-        break
-
-block = lines[start:end]
-
-# Does this __str__ build a string variable called _str?
-has__str_var = any(re.search(r"(?m)^\s*_str\s*=", l) or "_str +=" in l for l in block)
-
-new_block = []
-for l in block:
-    # rewrite any return inside __str__
-    mret = re.match(r"^(\s*)return\s+(.+)\s*$", l)
-    if mret:
-        ret_indent = mret.group(1)
-        expr = mret.group(2)
-        if has__str_var:
-            new_block.append(ret_indent + "return _str\n")
-        else:
-            new_block.append(ret_indent + f"return str({expr})\n")
-        continue
-    new_block.append(l)
-
-# Ensure there is a return at the end of __str__
-if not any(re.match(r"^\s*return\s+", l) for l in new_block):
-    # best-effort: if they built _str, return it; otherwise return a safe string
-    if has__str_var:
-        new_block.append(indent + "    return _str\n")
+    # Broader fallback: any assignment of two vars from torch.xpu.mem_get_info(self._execution_device)
+    pat2 = r"(?m)^(\\s*)(\\w+)\\s*,\\s*(\\w+)\\s*=\\s*torch\\.xpu\\.mem_get_info\\(self\\._execution_device\\)\\s*$"
+    m2 = re.search(pat2, txt)
+    if not m2:
+        print("WARN: no mem_get_info(self._execution_device) assignment found. Nothing to patch.")
     else:
-        new_block.append(indent + "    return \"\"\n")
+        indent = m2.group(1)
+        a = m2.group(2)
+        b = m2.group(3)
+        rep = (
+            f"{indent}try:\\n"
+            f"{indent}    {a}, {b} = torch.xpu.mem_get_info(self._execution_device)\\n"
+            f"{indent}except Exception:\\n"
+            f"{indent}    _gb = float(os.environ.get('{ENVKEY}', '0') or 0)\\n"
+            f"{indent}    {a} = 0\\n"
+            f"{indent}    {b} = int(_gb * (1024 ** 3)) if _gb > 0 else 0\\n"
+        )
+        txt = re.sub(pat2, rep, txt, count=1)
+        print("Patched broad mem_get_info fallback.")
+else:
+    indent = m.group(1)
+    rep = (
+        f"{indent}try:\\n"
+        f"{indent}    _, total_cuda_vram_bytes = torch.xpu.mem_get_info(self._execution_device)\\n"
+        f"{indent}except Exception:\\n"
+        f"{indent}    # Intel XPU may not support querying VRAM; use env override or 0\\n"
+        f"{indent}    _gb = float(os.environ.get('{ENVKEY}', '0') or 0)\\n"
+        f"{indent}    total_cuda_vram_bytes = int(_gb * (1024 ** 3)) if _gb > 0 else 0\\n"
+    )
+    txt = re.sub(pat, rep, txt, count=1)
+    print("Patched exact mem_get_info fallback in model_cache.py")
 
-# Write back
-lines2 = lines[:start] + new_block + lines[end:]
-STATS_COMMON.write_text("".join(lines2), encoding="utf-8")
-print("Patched:", STATS_COMMON)
-PYCODE
+p.write_text(txt, encoding="utf-8")
+print("Wrote:", p)
+PY
 
-# inject the actual path into the heredoc content
-# (this avoids bash expanding anything inside the quoted heredoc)
-perl -0777 -i -pe 's/__STATS_COMMON__/\Q'"$STATS_COMMON"'\E/g' "$0" 2>/dev/null || true
-
-log "50 done."
-log "Restart: systemctl restart invokeai.service"
+log "Validate patched modules compile..."
+python3 -m py_compile "$API_APP" "$MODEL_CACHE" 2>/dev/null || true
+python3 -m py_compile "$DIFF_PIPE" 2>/dev/null || true
+log "Done. Restart: systemctl restart invokeai.service"
