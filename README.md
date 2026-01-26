@@ -27,8 +27,6 @@ After a **long debugging session** with ChatGPT, this script captures **everythi
 - Headless Ubuntu 24.04
 - Proxmox LXC
 
-working together.
-
 This is not “best practice”.
 This is “this finally works”.
 
