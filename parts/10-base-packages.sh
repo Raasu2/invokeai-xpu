@@ -12,7 +12,7 @@ log "Installing base packages..."
 apt-get update
 apt-get install -y --no-install-recommends \
   ca-certificates curl gnupg git jq \
-  python3 python3-venv python3-pip \
+  python3 python3-venv \
   build-essential pkg-config make \
   cmake ninja-build python3-dev \
   ffmpeg libgl1 libsm6 libxext6 libxrender1 \
