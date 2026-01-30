@@ -78,7 +78,7 @@ InvokeAI runs on Intel GPU, images generate successfully, and the UI is accessib
 - ~~Generation preview may not update in real time~~
 - ~~UI may require a refresh after generation finishes~~
 - ~~Model downloads may not show progress until refresh~~
-- GPU may stay “awake” after generation unless the service is stopped 
+- GPU may stay “awake” after generation unless the service is stopped. This keeps fans spinning quite agressively. On Proxomox current workaround is to run `intel_gpu_top -l` after you want the fans to spin down. 
 
 ---
 
