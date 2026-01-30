@@ -28,6 +28,8 @@ sequential_guidance: true
 force_tiled_decode: false
 log_memory_usage: true
 log_level: info
+host: 0.0.0.0
+port: 9090
 YAML
 
 log "90.2: Ensure optional overrides env file exists (do not overwrite)..."
