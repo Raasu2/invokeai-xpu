@@ -45,11 +45,11 @@ Environment=SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1
 Environment=LD_LIBRARY_PATH=${VENV_DIR}/lib:${VENV_DIR}/lib/python3.12/site-packages/torch/lib:/usr/lib/x86_64-linux-gnu:/usr/local/lib
 
 # Hardcoded cache cap (display + fallback only)
-Environment=INVOKEAI_XPU_VRAM_TOTAL_GB=12
+Environment=INVOKEAI_XPU_VRAM_TOTAL_GB=16
 
 ExecStartPre=${VENV_DIR}/bin/python -c "import torch; print('torch',torch.__version__); print('xpu avail', torch.xpu.is_available()); print('count', torch.xpu.device_count()); print('dev0', torch.xpu.get_device_name(0) if torch.xpu.device_count() else 'none')"
 
-ExecStart=${VENV_DIR}/bin/python -m uvicorn invokeai.app.api_app:app --host 0.0.0.0 --port ${PORT}
+ExecStart=${VENV_DIR}/bin/invokeai-web --root /data/invokeai
 
 Restart=always
 RestartSec=2
