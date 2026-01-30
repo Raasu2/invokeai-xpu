@@ -38,7 +38,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   cat > "${ENV_FILE}" <<'ENV'
 # Optional overrides can go here.
 # Example:
-# INVOKEAI_XPU_VRAM_TOTAL_GB=12
+# INVOKEAI_XPU_VRAM_TOTAL_GB=16
 ENV
 fi
 
