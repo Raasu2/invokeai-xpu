@@ -75,9 +75,9 @@ InvokeAI runs on Intel GPU, images generate successfully, and the UI is accessib
 ## Known issues
 - InvokeAI **cannot accurately detect available VRAM** on Intel XPU  
 (workarounds are applied; generation still works)
-- Generation preview may not update in real time
-- UI may require a refresh after generation finishes
-- Model downloads may not show progress until refresh
+- ~~Generation preview may not update in real time~~
+- ~~UI may require a refresh after generation finishes~~
+- ~~Model downloads may not show progress until refresh~~
 - GPU may stay “awake” after generation unless the service is stopped 
 
 ---
