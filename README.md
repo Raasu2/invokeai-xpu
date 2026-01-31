@@ -19,7 +19,7 @@ Just: *make InvokeAI run on Intel GPU without fighting it for days*.
 
 I have an intel Arc B50 and too much free time. I like how easy InvokeAI is to use and wanted to see if i can make it work with the Arc. 
 
-After a **long debugging session** with ChatGPT, this script captures **everything that was needed**, in the **order it actually worked**, to get:
+After a **long debugging session** with ChatGPT, this script captures **everything that was needed**, in the **order to actually get it working**:
 
 - PyTorch XPU
 - InvokeAI 6.10
