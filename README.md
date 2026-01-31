@@ -29,9 +29,9 @@ After a **long debugging session** with ChatGPT, this script captures **everythi
 
 So this is:
 
-- ✅ A reproducible install that **actually runs InvokeAI on Intel XPU**
+- ✅ A reproducible install that **runs InvokeAI on Intel XPU**
 - ✅ Headless, systemd-managed, browser UI accessible
-- ✅ Tested on **Intel Arc (B-series) and Intel iGPU**
+- ✅ Tested on **Intel Arc (B-series)**
 - ❌ Not optimized
 - ❌ Not officially supported
 - ❌ Not guaranteed to survive future InvokeAI releases
@@ -59,9 +59,9 @@ The install script (`install-invoke-xpu.sh`) performs the following:
 - Installs **InvokeAI 6.10.0**
 - Writes a **minimal, XPU-safe InvokeAI config**
 - Applies **required runtime patches**, including:
-- Making `intel_extension_for_pytorch (IPEX)` optional
-- Guarding against missing `torch.xpu.mem_get_info()`
-- Fixing invocation stats crashes when VRAM info is unavailable
+  - Making `intel_extension_for_pytorch (IPEX)` optional
+  - Guarding against missing `torch.xpu.mem_get_info()`
+  - Fixing invocation stats crashes when VRAM info is unavailable
 
 ### Runtime
 - Creates a **systemd service**
