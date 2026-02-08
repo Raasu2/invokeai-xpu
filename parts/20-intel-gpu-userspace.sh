@@ -26,7 +26,8 @@ apt-get install -y --no-install-recommends \
   libze1 libze-intel-gpu1 libze-dev \
   libigdgmm12 \
   libdrm2 libdrm-intel1 \
-  intel-igc-cm
+  intel-igc-cm \
+  intel-gsc
 
 log "clinfo summary (should show Intel platform/device)"
 clinfo | egrep -n "Number of platforms|Platform Name|Device Name|Driver Version|OpenCL Version" | head -n 200 || true
