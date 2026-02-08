@@ -42,7 +42,7 @@ Environment=SYCL_CACHE_PERSISTENT=1
 Environment=SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1
 
 # Torch + Level Zero libs
-Environment=LD_LIBRARY_PATH=${VENV_DIR}/lib:${VENV_DIR}/lib/python3.12/site-packages/torch/lib:/usr/lib/x86_64-linux-gnu:/usr/local/lib
+Environment=LD_LIBRARY_PATH=${VENV_DIR}/lib:${VENV_DIR}/lib/python3.12/site-packages/torch/lib
 
 # Hardcoded cache cap (display + fallback only)
 Environment=INVOKEAI_XPU_VRAM_TOTAL_GB=16
