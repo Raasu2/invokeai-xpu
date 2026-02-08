@@ -39,7 +39,12 @@ Environment=PATH=${VENV_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
 # Intel XPU / Level Zero defaults (same as good build)
 Environment=ZE_ENABLE_PCI_ID_DEVICE_ORDER=1
 Environment=SYCL_CACHE_PERSISTENT=1
-Environment=SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1
+Environment=SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=0
+
+Environment=ONEAPI_ROOT=
+Environment=TBBROOT=
+Environment=DPCPPROOT=
+Environment=IOMP5ROOT=
 
 # Torch + Level Zero libs
 Environment=LD_LIBRARY_PATH=${VENV_DIR}/lib:${VENV_DIR}/lib/python3.12/site-packages/torch/lib
