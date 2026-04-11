@@ -95,6 +95,77 @@ log "Installing InvokeAI==${INVOKE_VER} (+loguru) into venv via uv..."
 # Install Invoke after torch so it doesn't try to pull a different torch variant.
 uv_pip_install "InvokeAI==${INVOKE_VER}" loguru
 
+log "Re-checking torch after InvokeAI install..."
+if ! "${VENV_DIR}/bin/python" - <<'PY'
+import sys
+import torch
+
+print("torch:", torch.__version__)
+
+ok = True
+
+if "+xpu" not in torch.__version__:
+    print("Torch is no longer an XPU build.")
+    ok = False
+
+try:
+    avail = torch.xpu.is_available()
+    cnt = torch.xpu.device_count()
+    print("xpu avail:", avail)
+    print("xpu count:", cnt)
+    if not avail or cnt < 1:
+        print("XPU not available or no devices detected.")
+        ok = False
+except Exception as e:
+    print("torch.xpu check failed:", repr(e))
+    ok = False
+
+sys.exit(0 if ok else 1)
+PY
+then
+  warn "InvokeAI install replaced or broke the XPU torch stack. Reinstalling PyTorch XPU packages..."
+
+  uv_pip_uninstall torch torchvision torchaudio pytorch-triton-xpu triton
+
+  uv_pip_install \
+    --index-url https://download.pytorch.org/whl/xpu \
+    --force-reinstall \
+    --no-cache-dir \
+    "torch==${TORCH_VER}" \
+    "torchvision==${TV_VER}" \
+    "torchaudio==${TA_VER}" \
+    "pytorch-triton-xpu"
+
+  log "Verifying restored torch XPU stack..."
+  "${VENV_DIR}/bin/python" - <<'PY'
+import sys
+import torch
+
+print("torch:", torch.__version__)
+
+ok = True
+
+if "+xpu" not in torch.__version__:
+    print("ERROR: torch is still not an XPU build:", torch.__version__)
+    ok = False
+
+try:
+    avail = torch.xpu.is_available()
+    cnt = torch.xpu.device_count()
+    print("xpu avail:", avail)
+    print("xpu count:", cnt)
+    if not avail or cnt < 1:
+        print("ERROR: XPU not available or no devices detected.")
+        ok = False
+except Exception as e:
+    print("ERROR: torch.xpu check failed:", repr(e))
+    ok = False
+
+if not ok:
+    sys.exit(3)
+PY
+fi
+
 log "Sanity-checking InvokeAI import..."
 "${VENV_DIR}/bin/python" - <<'PY'
 import invokeai
