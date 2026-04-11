@@ -16,14 +16,36 @@ fi
 
 VENV_DIR="${VENV_DIR:-/opt/invokeai-xpu}"
 PATCH_URL="${PATCH_URL:-https://raw.githubusercontent.com/MordragT/nixos/master/pkgs/by-lang/intel-python/invokeai/01-xpu-and-shutil.patch}"
+PATCH_LOCAL="${PATCH_LOCAL:-patches/01-xpu-and-shutil.patch}"
 
 [[ -x "${VENV_DIR}/bin/python" ]] || die "Venv python not found at ${VENV_DIR}/bin/python. Run Part D first."
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Resolve local patch path
+if [[ "${PATCH_LOCAL}" = /* ]]; then
+  PATCH_LOCAL_RESOLVED="${PATCH_LOCAL}"
+else
+  PATCH_LOCAL_RESOLVED="${REPO_ROOT}/${PATCH_LOCAL}"
+fi
 
 PATCH_RAW="/tmp/01-xpu-and-shutil.patch"
 PATCH_FILTERED="/tmp/01-xpu-and-shutil.filtered.patch"
 
-log "Downloading MordragT patch..."
-curl -fsSL -o "${PATCH_RAW}" "${PATCH_URL}"
+log "Fetching MordragT patch..."
+
+if curl -fsSL -o "${PATCH_RAW}" "${PATCH_URL}"; then
+  log "Downloaded patch from URL"
+else
+  warn "Failed to download patch from URL"
+  if [[ -f "${PATCH_LOCAL_RESOLVED}" ]]; then
+    log "Using local fallback patch: ${PATCH_LOCAL_RESOLVED}"
+    cp "${PATCH_LOCAL_RESOLVED}" "${PATCH_RAW}"
+  else
+    die "No usable patch found (URL failed and local patch missing)"
+  fi
+fi
 
 log "Filtering patch to only files that exist in this pip install..."
 "${VENV_DIR}/bin/python" - <<'PY'
@@ -91,6 +113,7 @@ PY
 )"
 
 cd "${SITEPKG}"
+
 # --forward makes re-runs safe; if already applied it will skip hunks
 patch --batch --forward -p1 < "${PATCH_FILTERED}" || true
 
