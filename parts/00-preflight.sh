@@ -24,7 +24,7 @@ PATCH_URL="${PATCH_URL:-https://raw.githubusercontent.com/MordragT/nixos/master/
 TORCH_VER="${TORCH_VER:-2.7.1+xpu}"
 TV_VER="${TV_VER:-0.22.1+xpu}"
 TA_VER="${TA_VER:-2.7.1+xpu}"
-INVOKE_VER="${INVOKE_VER:-6.10.0}"
+INVOKE_VER="${INVOKE_VER:-6.12.0}"
 
 log "OS info..."
 . /etc/os-release
