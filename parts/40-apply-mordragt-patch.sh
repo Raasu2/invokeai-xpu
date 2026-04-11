@@ -15,7 +15,7 @@ if [[ -f "$CONF" ]]; then
 fi
 
 VENV_DIR="${VENV_DIR:-/opt/invokeai-xpu}"
-PATCH_URL="${PATCH_URL:-https://raw.githubusercontent.com/MordragT/nixos/master/pkgs/by-scope/intel-python/invokeai/01-xpu-and-shutil.patch}"
+PATCH_URL="${PATCH_URL:-https://raw.githubusercontent.com/MordragT/nixos/master/pkgs/by-lang/intel-python/invokeai/01-xpu-and-shutil.patch}"
 
 [[ -x "${VENV_DIR}/bin/python" ]] || die "Venv python not found at ${VENV_DIR}/bin/python. Run Part D first."
 
