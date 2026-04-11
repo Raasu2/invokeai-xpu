@@ -56,7 +56,7 @@ The install script (`install-invoke-xpu.sh`) performs the following:
 - Prevents CUDA wheels from being pulled in
 
 ### InvokeAI
-- Installs **InvokeAI 6.10.0**
+- Installs **InvokeAI 6.12.0**
 - Writes a **minimal, XPU-safe InvokeAI config**
 - Applies **required runtime patches**, including:
   - Making `intel_extension_for_pytorch (IPEX)` optional
