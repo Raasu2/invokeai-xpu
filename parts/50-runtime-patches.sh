@@ -123,42 +123,20 @@ if re.search(r"(?m)^import os\\s*$", txt) is None:
         txt = "import os\\n" + txt
     print("Added: import os")
 
-if "torch.xpu.mem_get_info" not in txt:
-    print("No torch.xpu.mem_get_info(...) found. Nothing to patch.")
+pat = re.compile(
+    r"(?m)^(\\s*)(\\w+)\\s*,\\s*(\\w+)\\s*=\\s*torch\\.xpu\\.mem_get_info\\(([^\\)]+)\\)\\s*$"
+)
+
+matches = list(pat.finditer(txt))
+if not matches:
+    print("No torch.xpu.mem_get_info(...) assignments found.")
 else:
-    pat_exact = re.compile(
-        r"(?m)^(\\s*)(\\w+)\\s*,\\s*(\\w+)\\s*=\\s*torch\\.xpu\\.mem_get_info\\(self\\._execution_device\\)\\s*$"
-    )
+    count = 0
 
-    m = pat_exact.search(txt)
-    if m:
-        indent, a, b = m.group(1), m.group(2), m.group(3)
-        rep = (
-            f"{indent}try:\\n"
-            f"{indent}    {a}, {b} = torch.xpu.mem_get_info(self._execution_device)\\n"
-            f"{indent}except Exception:\\n"
-            f"{indent}    # Intel XPU may not support mem_get_info(); use env override or 0\\n"
-            f"{indent}    _gb = float(os.environ.get('{ENVKEY}', '0') or 0)\\n"
-            f"{indent}    {a} = 0\\n"
-            f"{indent}    {b} = int(_gb * (1024 ** 3)) if _gb > 0 else 0\\n"
-        )
-        txt = pat_exact.sub(rep, txt, count=1)
-        print("Patched: mem_get_info(self._execution_device) with try/except fallback")
-    else:
-        pat_broad = re.compile(
-            r"(?m)^(\\s*)(\\w+)\\s*,\\s*(\\w+)\\s*=\\s*torch\\.xpu\\.mem_get_info\\(([^\\)]+)\\)\\s*$"
-        )
-        m2 = pat_broad.search(txt)
-        if not m2:
-            raise SystemExit("ERROR: Could not find a torch.xpu.mem_get_info(...) assignment to patch in model_cache.py")
-
-        indent, a, b, arg = m2.group(1), m2.group(2), m2.group(3), m2.group(4).strip()
-        if "self._execution_device" not in arg:
-            raise SystemExit(
-                f"ERROR: Found mem_get_info({arg}) but it does not reference self._execution_device; refusing to patch blindly."
-            )
-
-        rep = (
+    def repl(m):
+        nonlocal_count = 0  # dummy to avoid lint complaints in some editors
+        indent, a, b, arg = m.group(1), m.group(2), m.group(3), m.group(4).strip()
+        return (
             f"{indent}try:\\n"
             f"{indent}    {a}, {b} = torch.xpu.mem_get_info({arg})\\n"
             f"{indent}except Exception:\\n"
@@ -167,8 +145,10 @@ else:
             f"{indent}    {a} = 0\\n"
             f"{indent}    {b} = int(_gb * (1024 ** 3)) if _gb > 0 else 0\\n"
         )
-        txt = pat_broad.sub(rep, txt, count=1)
-        print("Patched: broad mem_get_info(...) assignment")
+
+    new_txt, count = pat.subn(repl, txt)
+    txt = new_txt
+    print(f"Patched {count} torch.xpu.mem_get_info(...) assignment(s)")
 
 p.write_text(txt, encoding="utf-8")
 print("Wrote:", p)
