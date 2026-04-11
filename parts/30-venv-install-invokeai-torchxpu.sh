@@ -38,7 +38,7 @@ uv_pip_install(){
 }
 
 uv_pip_uninstall(){
-  uv pip uninstall --python "${VENV_DIR}/bin/python" -y "$@" || true
+  uv pip uninstall --python "${VENV_DIR}/bin/python" "$@" || true
 }
 
 uv_pip_freeze(){
