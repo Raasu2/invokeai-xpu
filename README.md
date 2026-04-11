@@ -22,7 +22,7 @@ I have an intel Arc B50 and too much free time. I like how easy InvokeAI is to u
 After a **long debugging session** with ChatGPT, this script captures **everything that was needed**, in the **order to actually get it working**:
 
 - PyTorch XPU
-- InvokeAI 6.10
+- InvokeAI 6.12
 - Intel Arc / iGPU
 - Headless Ubuntu 24.04
 - Proxmox LXC
@@ -56,7 +56,7 @@ The install script (`install-invoke-xpu.sh`) performs the following:
 - Prevents CUDA wheels from being pulled in
 
 ### InvokeAI
-- Installs **InvokeAI 6.10.0**
+- Installs **InvokeAI 6.12.0**
 - Writes a **minimal, XPU-safe InvokeAI config**
 - Applies **required runtime patches**, including:
   - Making `intel_extension_for_pytorch (IPEX)` optional
