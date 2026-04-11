@@ -141,7 +141,7 @@ sudo bash install-invoke-xpu.sh
 ---
 
 ## Optional: VRAM override
-Change the VRAM override in install.conf to your GPU's VRM. 
+Change the VRAM override in install.conf to your GPU's VRAM. 
 
 ```bash
 INVOKEAI_XPU_VRAM_TOTAL_GB="16"
