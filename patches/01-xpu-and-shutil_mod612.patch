@@ -109,9 +109,9 @@ index 0219d5036..7c90a5e5a 100644
 +                delta_vram_gb = (torch.xpu.memory_allocated() - vram_in_use) / GB
 +            else:
 +                delta_vram_gb = 0.0
+ 
              node_stats = NodeExecutionStats(
                  invocation_type=invocation.get_type(),
-                 start_time=start_time,
 @@ -80,7 +88,11 @@ class InvocationStatsService(InvocationStatsServiceBase):
          model_cache_stats_summary = self._get_model_cache_summary(graph_execution_state_id)
          # Note: We use memory_allocated() here (not memory_reserved()) because we want to show
