@@ -19,7 +19,7 @@ VENV_DIR="${VENV_DIR:-/opt/invokeai-xpu}"
 INVOKE_ROOT="${INVOKE_ROOT:-/data/invokeai}"
 PORT="${PORT:-9090}"
 SERVICE_NAME="${SERVICE_NAME:-invokeai.service}"
-PATCH_URL="${PATCH_URL:-https://raw.githubusercontent.com/MordragT/nixos/master/pkgs/by-scope/intel-python/invokeai/01-xpu-and-shutil.patch}"
+PATCH_URL="${PATCH_URL:-https://raw.githubusercontent.com/MordragT/nixos/master/pkgs/by-lang/intel-python/invokeai/01-xpu-and-shutil.patch}"
 
 TORCH_VER="${TORCH_VER:-2.7.1+xpu}"
 TV_VER="${TV_VER:-0.22.1+xpu}"
