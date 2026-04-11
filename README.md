@@ -99,16 +99,19 @@ InvokeAI runs on Intel GPU, images generate successfully, and the UI is accessib
 
 Example container config (`/etc/pve/lxc/<id>.conf`):
 
+```bash
 lxc.cgroup2.devices.allow: c 226:1 rwm  
 lxc.cgroup2.devices.allow: c 226:128 rwm  
 lxc.mount.entry: /dev/dri/card1 dev/dri/card1 none bind,optional,create=file  
-lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=file  
+lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=file
+```
 
 ⚠️ Device numbers may change after updates. Check:
 
+```bash
 ls -l /dev/dri  
 ls -l /dev/dri/by-path  
-
+```
 ---
 
 ### LXC container
@@ -123,15 +126,17 @@ ls -l /dev/dri/by-path
 
 ## Quick start
 
+```bash
 git clone https://github.com/Raasu2/invokeai-xpu.git  
 cd invokeai-xpu  
 chmod +x install-invoke-xpu.sh  
 sudo bash install-invoke-xpu.sh  
-
+```
 ---
 
 ## Optional: VRAM override
 
+```bash
 systemctl edit invokeai.service  
 
 [Service]  
@@ -139,7 +144,7 @@ Environment=INVOKEAI_XPU_VRAM_TOTAL_GB=16
 
 systemctl daemon-reload  
 systemctl restart invokeai.service  
-
+```
 ---
 
 ## Thanks / Credits
