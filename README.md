@@ -85,7 +85,12 @@ InvokeAI runs on Intel GPU, images generate successfully, and the UI is accessib
 - Patchmatch may fail to compile/load  
   (this is non-fatal and does not affect generation)
 
-- GPU may stay “awake” after generation unless the service is stopped  
+- GPU may stay “awake” after generation unless the service is stopped
+  On Proxmox, current workaround is to run on the host:
+
+  ```bash
+  intel_gpu_top -l
+  ```
 
 ---
 
