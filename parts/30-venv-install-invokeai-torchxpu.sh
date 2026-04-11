@@ -25,7 +25,7 @@ SERVICE_NAME="${SERVICE_NAME:-invokeai.service}"
 TORCH_VER="${TORCH_VER:-2.7.1+xpu}"
 TV_VER="${TV_VER:-0.22.1+xpu}"
 TA_VER="${TA_VER:-2.7.1+xpu}"
-INVOKE_VER="${INVOKE_VER:-6.10.0}"
+INVOKE_VER="${INVOKE_VER:-6.12.0}"
 
 # Prefer system python for LXC/headless determinism
 SYSTEM_PY="${SYSTEM_PY:-/usr/bin/python3}"
