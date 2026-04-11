@@ -1,41 +1,41 @@
 # invokeai-xpu
-InvokeAI running on Intel Arc GPUs using PyTorch XPU (Level Zero), deployed headlessly on Ubuntu 24.04 LXC with systemd
+InvokeAI running on Intel Arc GPUs using PyTorch XPU (Level Zero), deployed headlessly on Ubuntu 24.04 LXC with systemd.
 
 ## InvokeAI on Intel GPU (XPU, no CUDA)
 
-This repo is basically a **“what finally worked” script** for running **InvokeAI on Intel GPUs** (Arc or iGPU) using **PyTorch XPU** on **Ubuntu 24.04**, inside a **Proxmox LXC**.
+This repo is basically a “what finally worked” script for running InvokeAI on Intel GPUs using PyTorch XPU on Ubuntu 24.04 inside a Proxmox LXC.
 
 No CUDA.  
 No Docker.  
-No fancy setup.  
+No fancy setup.
 
-Just: *make InvokeAI run on Intel GPU without fighting it for days*.
+Just: make InvokeAI run on Intel GPU without fighting it for days.
 
-**Disclaimer:** this is purely *vibecoded*
+**Disclaimer:** this is purely vibecoded.
 
 ---
 
 ## Why this repo exists
 
-I have an intel Arc B50 and too much free time. I like how easy InvokeAI is to use and wanted to see if i can make it work with the Arc. 
+I have an Intel Arc B50 and too much free time. I like how easy InvokeAI is to use and wanted to see if I could make it work with the Arc.
 
-After a **long debugging session** with ChatGPT, this script captures **everything that was needed**, in the **order to actually get it working**:
+After a long debugging session, this script captures everything that was needed, in the order required to actually get it working:
 
 - PyTorch XPU
 - InvokeAI 6.12
-- Intel Arc / iGPU
+- Intel Arc / Intel XPU
 - Headless Ubuntu 24.04
 - Proxmox LXC
 
 So this is:
 
-- ✅ A reproducible install that **runs InvokeAI on Intel XPU**
+- ✅ A reproducible install that runs InvokeAI on Intel XPU
 - ✅ Headless, systemd-managed, browser UI accessible
-- ✅ Tested on **Intel Arc (B-series)**
+- ✅ Tested on Intel Arc B50
+- ✅ Can also work on direct Ubuntu installs (non-LXC)
 - ❌ Not optimized
 - ❌ Not officially supported
 - ❌ Not guaranteed to survive future InvokeAI releases
-
 
 ---
 
@@ -51,20 +51,23 @@ The install script (`install-invoke-xpu.sh`) performs the following:
 - Verifies `/dev/dri/renderD*` access inside LXC
 
 ### Python & PyTorch
-- Creates a clean Python virtualenv at: `/opt/invokeai-xpu`
-- Forces **PyTorch XPU wheels**
-- Prevents CUDA wheels from being pulled in
+- Creates a clean Python virtualenv at `/opt/invokeai-xpu`
+- Installs PyTorch XPU wheels
+- Verifies the installed torch build still has XPU support
+- Reinstalls the XPU torch stack if InvokeAI replaces it
 
 ### InvokeAI
-- Installs **InvokeAI 6.12.0**
-- Writes a **minimal, XPU-safe InvokeAI config**
-- Applies **required runtime patches**, including:
-  - Making `intel_extension_for_pytorch (IPEX)` optional
-  - Guarding against missing `torch.xpu.mem_get_info()`
-  - Fixing invocation stats crashes when VRAM info is unavailable
+- Installs InvokeAI 6.12.0
+- Writes a minimal XPU-safe InvokeAI config
+- Applies the upstream MordragT patch
+- Falls back to a local patch if the URL is unavailable
+- Applies compatibility fixes for InvokeAI 6.12
 
 ### Runtime
-- Creates a **systemd service**
+- Makes `intel_extension_for_pytorch (IPEX)` optional
+- Guards against missing `torch.xpu.mem_get_info()`
+- Fixes invocation stats for XPU when VRAM info is unavailable
+- Creates a systemd service
 - Verifies XPU availability at startup
 - Runs InvokeAI fully headless
 - Exposes the web UI over HTTP
@@ -72,13 +75,17 @@ The install script (`install-invoke-xpu.sh`) performs the following:
 ### End result
 InvokeAI runs on Intel GPU, images generate successfully, and the UI is accessible from a browser.
 
+---
+
 ## Known issues
-- InvokeAI **cannot accurately detect available VRAM** on Intel XPU  
-(workarounds are applied; generation still works)
-- ~~Generation preview may not update in real time~~
-- ~~UI may require a refresh after generation finishes~~
-- ~~Model downloads may not show progress until refresh~~
-- GPU may stay “awake” after generation unless the service is stopped. This keeps fans spinning quite agressively. On Proxomox current workaround is to run `intel_gpu_top -l` on **host** after you want the fans to spin down OR constantly while running Invoke.
+
+- InvokeAI cannot accurately detect available VRAM on Intel XPU  
+  (workarounds are applied; generation still works)
+
+- Patchmatch may fail to compile/load  
+  (this is non-fatal and does not affect generation)
+
+- GPU may stay “awake” after generation unless the service is stopped  
 
 ---
 
@@ -89,37 +96,52 @@ InvokeAI runs on Intel GPU, images generate successfully, and the UI is accessib
 - Intel GPU
 - XE driver
 - GPU passed through to the LXC
-- This is what I added to the container config file on the Proxmox host (`/etc/pve/lxc/<id>.conf`):
-```bash
-lxc.cgroup2.devices.allow: c 226:1 rwm
-lxc.cgroup2.devices.allow: c 226:128 rwm
-lxc.mount.entry: /dev/dri/card1 dev/dri/card1 none bind,optional,create=file
-lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=file
-```
+
+Example container config (`/etc/pve/lxc/<id>.conf`):
+
+lxc.cgroup2.devices.allow: c 226:1 rwm  
+lxc.cgroup2.devices.allow: c 226:128 rwm  
+lxc.mount.entry: /dev/dri/card1 dev/dri/card1 none bind,optional,create=file  
+lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=file  
+
+⚠️ Device numbers may change after updates. Check:
+
+ls -l /dev/dri  
+ls -l /dev/dri/by-path  
 
 ---
 
 ### LXC container
 
-- Ubuntu **24.04 LTS**
+- Ubuntu 24.04 LTS
 - Fresh install recommended
 - Internet access
-- Privileged, nesting
+- Privileged container
+- Nesting enabled
 
 ---
 
 ## Quick start
 
-On a clean Ubuntu 24.04 LXC:
+git clone https://github.com/Raasu2/invokeai-xpu.git  
+cd invokeai-xpu  
+chmod +x install-invoke-xpu.sh  
+sudo bash install-invoke-xpu.sh  
 
-```bash
-git clone https://github.com/Raasu2/invokeai-xpu.git
-cd invokeai-xpu
-chmod +x install-invoke-xpu.sh
-sudo bash install-invoke-xpu.sh
-```
+---
+
+## Optional: VRAM override
+
+systemctl edit invokeai.service  
+
+[Service]  
+Environment=INVOKEAI_XPU_VRAM_TOTAL_GB=16  
+
+systemctl daemon-reload  
+systemctl restart invokeai.service  
+
+---
 
 ## Thanks / Credits
 
-Huge thanks to **MordragT** for the original InvokeAI XPU patches.
-This setup would not exist without that work.
+Huge thanks to MordragT for the original InvokeAI XPU patches.
