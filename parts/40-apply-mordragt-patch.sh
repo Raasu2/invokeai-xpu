@@ -16,24 +16,51 @@ fi
 
 VENV_DIR="${VENV_DIR:-/opt/invokeai-xpu}"
 PATCH_URL="${PATCH_URL:-https://raw.githubusercontent.com/MordragT/nixos/master/pkgs/by-lang/intel-python/invokeai/01-xpu-and-shutil.patch}"
+PATCH_LOCAL="${PATCH_LOCAL:-patches/MordragT/01-xpu-and-shutil.patch}"
 
-[[ -x "${VENV_DIR}/bin/python" ]] || die "Venv python not found at ${VENV_DIR}/bin/python. Run Part D first."
+[[ -x "${VENV_DIR}/bin/python" ]] || die "Venv python not found at ${VENV_DIR}/bin/python. Run Part 30 first."
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+if [[ "${PATCH_LOCAL}" = /* ]]; then
+  PATCH_LOCAL_RESOLVED="${PATCH_LOCAL}"
+else
+  PATCH_LOCAL_RESOLVED="${REPO_ROOT}/${PATCH_LOCAL}"
+fi
 
 PATCH_RAW="/tmp/01-xpu-and-shutil.patch"
 PATCH_FILTERED="/tmp/01-xpu-and-shutil.filtered.patch"
+PATCH_LOG="/tmp/01-xpu-and-shutil.patch.log"
 
-log "Downloading MordragT patch..."
-curl -fsSL -o "${PATCH_RAW}" "${PATCH_URL}"
+log "Patch sources"
+echo "PATCH_URL=${PATCH_URL}"
+echo "PATCH_LOCAL=${PATCH_LOCAL_RESOLVED}"
+
+if [[ -f "${PATCH_LOCAL_RESOLVED}" ]]; then
+  log "Using local patch from install.conf"
+  cp "${PATCH_LOCAL_RESOLVED}" "${PATCH_RAW}"
+else
+  warn "Local patch not found: ${PATCH_LOCAL_RESOLVED}"
+  warn "Trying URL patch instead: ${PATCH_URL}"
+  if ! curl -fsSL -o "${PATCH_RAW}" "${PATCH_URL}"; then
+    die "Failed to get patch from both local path and URL."
+  fi
+fi
 
 log "Filtering patch to only files that exist in this pip install..."
 "${VENV_DIR}/bin/python" - <<'PY'
-import os, re, sys, site
+import os
+import re
+import sys
+import site
 
 sitepk = None
 for p in site.getsitepackages():
     if p.endswith("site-packages"):
         sitepk = p
         break
+
 if not sitepk:
     print("Could not locate site-packages", file=sys.stderr)
     sys.exit(1)
@@ -62,9 +89,9 @@ for ch in chunks:
     m = re.match(r"diff --git a/(.+?) b/(.+?)\s*$", header)
     if not m:
         continue
+
     a_path, b_path = m.group(1), m.group(2)
 
-    # Skip frontend paths (not in pip install)
     if a_path.startswith("invokeai/frontend/") or b_path.startswith("invokeai/frontend/"):
         continue
 
@@ -81,17 +108,32 @@ print("kept_chunks:", len(kept))
 print("wrote:", out)
 PY
 
-log "Applying filtered patch..."
 SITEPKG="$("${VENV_DIR}/bin/python" - <<'PY'
 import site
 for p in site.getsitepackages():
     if p.endswith("site-packages"):
-        print(p); break
+        print(p)
+        break
 PY
 )"
 
 cd "${SITEPKG}"
-# --forward makes re-runs safe; if already applied it will skip hunks
-patch --batch --forward -p1 < "${PATCH_FILTERED}" || true
 
-log "Patch applied (or already present)."
+log "Applying filtered patch..."
+set +e
+patch --batch --forward -p1 < "${PATCH_FILTERED}" 2>&1 | tee "${PATCH_LOG}"
+PATCH_RC=${PIPESTATUS[0]}
+set -e
+
+if [[ "${PATCH_RC}" -ne 0 ]]; then
+  warn "patch returned non-zero exit code: ${PATCH_RC}"
+fi
+
+if grep -q "FAILED" "${PATCH_LOG}"; then
+  warn "Some patch hunks failed."
+  warn "See log: ${PATCH_LOG}"
+else
+  log "Patch applied cleanly (or already present)."
+fi
+
+log "Done."
