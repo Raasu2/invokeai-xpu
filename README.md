@@ -22,7 +22,7 @@ I have an intel Arc B50 and too much free time. I like how easy InvokeAI is to u
 After a **long debugging session** with ChatGPT, this script captures **everything that was needed**, in the **order to actually get it working**:
 
 - PyTorch XPU
-- InvokeAI 6.10
+- InvokeAI 6.12
 - Intel Arc / iGPU
 - Headless Ubuntu 24.04
 - Proxmox LXC
