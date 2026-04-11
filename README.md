@@ -86,7 +86,7 @@ InvokeAI runs on Intel GPU, images generate successfully, and the UI is accessib
   (this is non-fatal and does not affect generation)
 
 - GPU may stay “awake” after generation unless the service is stopped
-  On Proxmox, current workaround is to run on the host:
+- On Proxmox, current workaround is to run on the host:
 
   ```bash
   intel_gpu_top -l
