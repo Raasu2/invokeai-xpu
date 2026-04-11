@@ -13,6 +13,7 @@ VENV_DIR="${VENV_DIR:-/opt/invokeai-xpu}"
 INVOKE_ROOT="${INVOKE_ROOT:-/data/invokeai}"
 PORT="${PORT:-9090}"
 SERVICE_NAME="${SERVICE_NAME:-invokeai.service}"
+INVOKEAI_XPU_VRAM_TOTAL_GB="${INVOKEAI_XPU_VRAM_TOTAL_GB:-16}"
 
 UNIT="/etc/systemd/system/${SERVICE_NAME}"
 
@@ -50,7 +51,7 @@ Environment=IOMP5ROOT=
 Environment=LD_LIBRARY_PATH=${VENV_DIR}/lib:${VENV_DIR}/lib/python3.12/site-packages/torch/lib
 
 # Hardcoded cache cap (display + fallback only)
-Environment=INVOKEAI_XPU_VRAM_TOTAL_GB=16
+Environment=INVOKEAI_XPU_VRAM_TOTAL_GB=${INVOKEAI_XPU_VRAM_TOTAL_GB}
 
 ExecStartPre=${VENV_DIR}/bin/python -c "import torch; print('torch',torch.__version__); print('xpu avail', torch.xpu.is_available()); print('count', torch.xpu.device_count()); print('dev0', torch.xpu.get_device_name(0) if torch.xpu.device_count() else 'none')"
 
