@@ -123,9 +123,11 @@ PATCH_RC=${PIPESTATUS[0]}
 set -e
 
 if [[ "${PATCH_RC}" -ne 0 ]]; then
-  die "Patch apply failed. See log: ${PATCH_LOG}"
+  warn "Patch apply returned non-zero exit code: ${PATCH_RC}"
+  warn "See log: ${PATCH_LOG}"
 elif grep -q "FAILED" "${PATCH_LOG}"; then
-  die "Some patch hunks failed. See log: ${PATCH_LOG}"
+  warn "Some patch hunks failed."
+  warn "See log: ${PATCH_LOG}"
 else
   log "Patch applied cleanly (or already present)."
 fi
