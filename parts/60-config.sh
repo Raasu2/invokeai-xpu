@@ -18,7 +18,7 @@ ENV_FILE="${ENV_DIR}/invokeai-xpu.env"
 log "90.1: Create INVOKE_ROOT + baseline invokeai.yaml..."
 mkdir -p "${INVOKE_ROOT}"
 cat > "${INVOKE_ROOT}/invokeai.yaml" <<YAML
-schema_version: 4.0.2
+schema_version: 4.0.3
 device: xpu
 precision: bfloat16
 lazy_offload: true
