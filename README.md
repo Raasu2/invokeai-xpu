@@ -22,7 +22,7 @@ I have an Intel Arc B50 and too much free time. I like how easy InvokeAI is to u
 After a long debugging session, this script captures everything that was needed, in the order required to actually get it working:
 
 - PyTorch XPU
-- InvokeAI 6.12
+- InvokeAI 6.13
 - Intel Arc / Intel XPU
 - Headless Ubuntu 24.04
 - Proxmox LXC
@@ -57,11 +57,11 @@ The install script (`install-invoke-xpu.sh`) performs the following:
 - Reinstalls the XPU torch stack if InvokeAI replaces it
 
 ### InvokeAI
-- Installs InvokeAI 6.12.0
+- Installs InvokeAI 6.13.0
 - Writes a minimal XPU-safe InvokeAI config
 - Applies the upstream MordragT patch
 - Falls back to a local patch if the URL is unavailable
-- Applies compatibility fixes for InvokeAI 6.12
+- Applies compatibility fixes for InvokeAI 6.13
 
 ### Runtime
 - Makes `intel_extension_for_pytorch (IPEX)` optional
