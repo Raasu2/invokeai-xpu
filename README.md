@@ -1,153 +1,160 @@
 # invokeai-xpu
-InvokeAI running on Intel Arc GPUs using PyTorch XPU (Level Zero), deployed headlessly on Ubuntu 24.04 LXC with systemd.
+InvokeAI running on Intel Arc GPUs using native PyTorch XPU support, deployed headlessly on Ubuntu LXC/VM with systemd.
 
 ## InvokeAI on Intel GPU (XPU, no CUDA)
 
-This repo is basically a “what finally worked” script for running InvokeAI on Intel GPUs using PyTorch XPU on Ubuntu 24.04 inside a Proxmox LXC.
+This is a single-script installer for running InvokeAI on Intel GPUs using **native XPU support** (introduced in InvokeAI 6.14).
 
-No CUDA.  
-No Docker.  
-No fancy setup.
+Just: run InvokeAI on Intel GPU with one script.
 
-Just: make InvokeAI run on Intel GPU without fighting it for days.
-
-**Disclaimer:** this is purely vibecoded.
-
+**Disclaimer:** purely vibecoded.
 ---
 
-## Why this repo exists
+## Why this script exists
 
-I have an Intel Arc B50 and too much free time. I like how easy InvokeAI is to use and wanted to see if I could make it work with the Arc.
+I have an Intel Arc B50 Pro and wanted InvokeAI to work on it. Since InvokeAI 6.14 added native `torch.xpu` device support, all the custom patches, workarounds, and manual torch pinning are no longer needed.
 
-After a long debugging session, this script captures everything that was needed, in the order required to actually get it working:
-
-- PyTorch XPU
-- InvokeAI 6.13
-- Intel Arc / Intel XPU
-- Headless Ubuntu 24.04
-- Proxmox LXC
-
-So this is:
-
-- ✅ A reproducible install that runs InvokeAI on Intel XPU
+This script captures the essentials in one reproducible installer:
+- ✅ Native `torch.xpu` backend
 - ✅ Headless, systemd-managed, browser UI accessible
-- ✅ Tested on Intel Arc B50
-- ✅ Can also work on direct Ubuntu installs (non-LXC)
-- ❌ Not optimized
-- ❌ Not officially supported
-- ❌ Not guaranteed to survive future InvokeAI releases
+- ✅ Pre-flight checks for Ubuntu version and kernel
+- ✅ Installs Intel compute runtime from Intel's repo (25.40+ for Battlemage stability)
+- ✅ Works on Proxmox LXC **and** VM (GPU passthrough)
+- ✅ Uses `uv` with `--torch-backend=xpu` — gets correct torch+xpu automatically
 
 ---
 
 ## What this script does
 
-The install script (`install-invoke-xpu.sh`) performs the following:
+The installer (`install-invokeai-xpu-proxmox.sh`) performs:
+
+### Pre-flight
+- Checks Ubuntu version (24.04, 25.04, 25.10, 26.04)
+- Checks kernel version (≥ 6.14 required for Battlemage)
+- Verifies `/dev/dri/renderD*` access inside LXC/VM
 
 ### System & GPU
-- Installs Intel GPU userspace:
-  - Level Zero
-  - OpenCL ICD
-  - Media drivers
-- Verifies `/dev/dri/renderD*` access inside LXC
+- Adds Intel GPU repo
+- Removes stale Ubuntu compute runtime (24.x — known BMG crash)
+- Installs Intel GPU userspace from Intel's repo:
+  - Level Zero (`libze1`, `libze-intel-gpu1`)
+  - OpenCL ICD (`intel-opencl-icd`)
+  - Compiler/runtime (`intel-igc-cm`, `intel-gsc`)
 
-### Python & PyTorch
-- Creates a clean Python virtualenv at `/opt/invokeai-xpu`
-- Installs PyTorch XPU wheels
-- Verifies the installed torch build still has XPU support
-- Reinstalls the XPU torch stack if InvokeAI replaces it
-
-### InvokeAI
-- Installs InvokeAI 6.13.0
-- Writes a minimal XPU-safe InvokeAI config
-- Applies the upstream MordragT patch
-- Falls back to a local patch if the URL is unavailable
-- Applies compatibility fixes for InvokeAI 6.13
+### Python & InvokeAI
+- Installs `uv` (Astral's fast Python package manager)
+- Creates relocatable venv at `/opt/invokeai-xpu` with uv-managed Python 3.12
+- Installs `invokeai[xpu]==6.14.0` via `uv pip install --torch-backend=xpu`
+- Verifies `torch.xpu.is_available()` and device detection
 
 ### Runtime
-- Makes `intel_extension_for_pytorch (IPEX)` optional
-- Guards against missing `torch.xpu.mem_get_info()`
-- Fixes invocation stats for XPU when VRAM info is unavailable
-- Creates a systemd service
-- Verifies XPU availability at startup
-- Runs InvokeAI fully headless
-- Exposes the web UI over HTTP
+- Writes minimal `invokeai.yaml` (device: xpu, bfloat16, lazy_offload)
+- Creates optional VRAM override at `/etc/invokeai/invokeai-xpu.env`
+- Creates systemd service with Intel XPU env vars
+- Includes BMG stability workarounds (`NEOReadDebugKeys=1`, `RenderCompressedBuffersEnabled=0`)
+- Starts service on boot, logs to journal
 
 ### End result
-InvokeAI runs on Intel GPU, images generate successfully, and the UI is accessible from a browser.
-
----
-
-## Known issues
-
-- InvokeAI cannot accurately detect available VRAM on Intel XPU  
-  (workarounds are applied; generation still works)
-
-- Patchmatch may fail to compile/load  
-  (this is non-fatal and does not affect generation)
-
-- GPU may stay “awake” after generation unless the service is stopped
-
-  On Proxmox, current workaround is to run on the host:
-
-  ```bash
-  intel_gpu_top -l
-  ```
+InvokeAI runs on Intel GPU, images generate successfully, UI accessible at `http://<IP>:9090`.
 
 ---
 
 ## Requirements
 
-### Proxmox host
+### Proxmox Host
+- Intel GPU (Arc Alchemist A-series, Battlemage B-series)
+- i915/Xe kernel driver loaded
+- GPU passed through to LXC **or** VM
 
-- Intel GPU
-- XE driver
-- GPU passed through to the LXC
-
-Example container config (`/etc/pve/lxc/<id>.conf`):
-
+#### LXC Container Config (`/etc/pve/lxc/<id>.conf`):
 ```bash
 lxc.cgroup2.devices.allow: c 226:0 rwm
 lxc.cgroup2.devices.allow: c 226:129 rwm
 lxc.mount.entry: /dev/dri/card0 dev/dri/card0 none bind,optional,create=file
 lxc.mount.entry: /dev/dri/renderD129 dev/dri/renderD129 none bind,optional,create=file
 ```
+⚠️ Device numbers may change. Verify with `ls -l /dev/dri` on host.
 
-⚠️ Device numbers may change after updates. Check:
+#### VM (PCI Passthrough)
+- Add GPU as PCI device in VM hardware config
+- Ensure `vfio-pci` driver binds on host
 
-```bash
-ls -l /dev/dri  
-ls -l /dev/dri/by-path  
-```
 ---
 
-### LXC container
-
-- Ubuntu 24.04 LTS
+### LXC Container / VM
+- Ubuntu 24.04, 25.04, 25.10, or 26.04
+- Kernel 6.14+ (Ubuntu 24.04: install `linux-generic-hwe-24.04`)
 - Fresh install recommended
 - Internet access
-- Privileged container
-- Nesting enabled
+- Privileged container (LXC) or standard VM
 
 ---
 
-## Quick start
+## Quick Start
 
 ```bash
-git clone https://github.com/Raasu2/invokeai-xpu.git  
-cd invokeai-xpu  
-chmod +x install-invoke-xpu.sh  
-sudo bash install-invoke-xpu.sh  
+git clone https://github.com/Raasu2/invokeai-xpu.git
+cd invokeai-xpu
+chmod +x install-invokeai-xpu-proxmox.sh
+sudo bash install-invokeai-xpu-proxmox.sh
 ```
+
+That's it. Wait for completion, then open `http://<VM-IP>:9090`.
+
 ---
 
-## Optional: VRAM override
-Change the VRAM override in install.conf to your GPU's VRAM. 
+## Configuration
+
+All settings are at the top of `install-invokeai-xpu-proxmox.sh`:
 
 ```bash
-INVOKEAI_XPU_VRAM_TOTAL_GB="16"
+VENV_DIR="/opt/invokeai-xpu"        # Virtual environment location
+INVOKE_ROOT="/data/invokeai"        # InvokeAI root directory (models, outputs)
+PORT="9090"                         # Web UI port
+SERVICE_NAME="invokeai.service"     # systemd unit name
+INVOKEAI_XPU_VRAM_TOTAL_GB="16"     # VRAM override (for passthrough VMs)
+SERVICE_USER="root"                 # Service user (change to dedicated user if desired)
+INVOKE_VER="6.14.0"                 # InvokeAI version
 ```
+
+### VRAM Override
+For GPU passthrough VMs where driver-global VRAM query (Sysman) may not work, set:
+```bash
+INVOKEAI_XPU_VRAM_TOTAL_GB="16"  # Match your GPU's VRAM
+```
+
+### Non-root Service User
+```bash
+# Before running installer:
+useradd -r -s /bin/false invokeai
+# Then set in script:
+SERVICE_USER="invokeai"
+```
+
+---
+
+## Troubleshooting
+
+| Issue | Check |
+|-------|-------|
+| `/dev/dri` missing | GPU not passed through to LXC/VM |
+| Kernel too old | Install HWE kernel or upgrade Ubuntu |
+| `torch.xpu.is_available()` false | Level Zero packages missing |
+| OOM on generation | Increase `INVOKEAI_XPU_VRAM_TOTAL_GB` |
+| Service won't start | `journalctl -u invokeai.service -f` |
+| SIGABRT in `command_encoder` | Stale compute runtime — re-run installer to upgrade from Intel repo |
+| `patchmatch` warning | Non-fatal, does not affect generation |
+
 ---
 
 ## Thanks / Credits
 
-Huge thanks to MordragT for the original InvokeAI XPU patches.
+- **InvokeAI team** — Native XPU support (PR #9401)
+- **LexiconCode** — Primary author of native XPU backend
+- **MordragT** — Original XPU patches that paved the way
+- **Astral** — `uv` package manager
+
+---
+
+## License
+MIT
